@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>บันทึกการขาย</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",sans-serif;background:#f4f4f5;color:#18181b}
+header{position:sticky;top:0;background:#fff;border-bottom:1px solid #ddd;padding:12px 14px;z-index:5}
+h1{font-size:20px;margin:0 0 8px}
+.summary{display:grid;grid-template-columns:2fr 1fr 1fr;gap:7px}
+.card{background:#f7f7f8;border-radius:10px;padding:8px;text-align:center}
+.card b{display:block;font-size:18px}.card small{color:#666}
+main{padding:12px;max-width:700px;margin:auto}
+.products{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+button{font:inherit;border:0;cursor:pointer}
+.product{min-height:72px;background:#fff;border-radius:14px;padding:10px;box-shadow:0 1px 4px #0001;font-weight:700}
+.product span{display:block;font-size:20px}.product small{color:#666}
+.actions{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:14px 0}
+.pay{padding:18px 8px;border-radius:14px;font-weight:800;background:#fff}
+.cash{border:2px solid #22c55e}.transfer{border:2px solid #3b82f6}
+.section{background:#fff;border-radius:14px;padding:12px;margin-top:14px}
+.row{display:flex;justify-content:space-between;gap:8px;border-bottom:1px solid #eee;padding:9px 0}
+.row:last-child{border-bottom:0}
+.danger{background:#fee2e2;color:#991b1b;padding:10px;border-radius:10px;margin-top:10px;width:100%}
+.secondary{background:#e4e4e7;padding:10px;border-radius:10px;width:100%;margin-top:8px}
+#modal{display:none;position:fixed;inset:0;background:#0007;z-index:10;align-items:flex-end}
+.sheet{background:#fff;border-radius:20px 20px 0 0;padding:18px;width:100%;max-width:700px;margin:auto}
+.close{float:right;background:#eee;border-radius:50%;width:36px;height:36px}
+#toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#18181b;color:#fff;padding:10px 16px;border-radius:20px;display:none;z-index:20}
+@media(min-width:600px){.products{grid-template-columns:repeat(3,1fr)}}
+</style>
+</head>
+<body>
+<header>
+<h1>💰 บันทึกการขาย</h1>
+<div class="summary">
+<div class="card"><small>ยอดรวม</small><b id="total">฿0</b></div>
+<div class="card"><small>เงินสด</small><b id="cash">฿0</b></div>
+<div class="card"><small>โอน</small><b id="transfer">฿0</b></div>
+</div>
+</header>
+
+<main>
+<div class="products" id="products"></div>
+
+<div class="section">
+<b>📋 รายการล่าสุด</b>
+<div id="history"></div>
+<button class="secondary" onclick="exportData()">สำรองข้อมูล</button>
+<button class="secondary" onclick="document.getElementById('importFile').click()">นำเข้าข้อมูล</button>
+<input id="importFile" type="file" accept=".json" style="display:none" onchange="importData(event)">
+<button class="danger" onclick="clearAll()">ล้างรายการทั้งหมด</button>
+</div>
+</main>
+
+<div id="modal">
+<div class="sheet">
+<button class="close" onclick="closeModal()">×</button>
+<h2 id="chosen"></h2>
+<p id="priceText"></p>
+<div class="actions">
+<button class="pay cash" onclick="saveSale('เงินสด')">💵 เงินสด</button>
+<button class="pay transfer" onclick="saveSale('โอน')">📱 โอน</button>
+</div>
+</div>
+</div>
+<div id="toast"></div>
+
+<script>
+const products=[
+["ผญ",70],["ผล",50],["ดิบ",50],["แดง",70],["น้ำ ล",28],["น้ำ ญ",29],
+["ต้ม กก.",40],["ต้มขีด",10],["เตี้ยว",20],["แก้ว ก",150],["สด",20],
+["โออิชิ",20],["โค๊ก ล",20],["โค้กญ",40],["แก้ว ล",100],["แก้ว ญ",200],
+["sixnine",50]
+];
+let sales=JSON.parse(localStorage.getItem("salesAppData")||"[]");
+let selected=null;
+
+function money(n){return "฿"+Number(n).toLocaleString("th-TH")}
+function renderProducts(){
+ document.getElementById("products").innerHTML=products.map((p,i)=>
+ `<button class="product" onclick="choose(${i})"><span>${p[0]}</span><small>${money(p[1])}</small></button>`).join("");
+}
+function choose(i){
+ selected=products[i];
+ document.getElementById("chosen").textContent=selected[0];
+ document.getElementById("priceText").textContent=money(selected[1]);
+ document.getElementById("modal").style.display="flex";
+}
+function closeModal(){document.getElementById("modal").style.display="none"}
+function saveSale(method){
+ if(!selected)return;
+ sales.push({product:selected[0],price:selected[1],method,time:new Date().toISOString()});
+ localStorage.setItem("salesAppData",JSON.stringify(sales));
+ closeModal(); render();
+ showToast("บันทึกแล้ว ✓");
+}
+function render(){
+ let total=0,cash=0,transfer=0;
+ sales.forEach(s=>{total+=s.price;if(s.method==="เงินสด")cash+=s.price;else transfer+=s.price});
+ document.getElementById("total").textContent=money(total);
+ document.getElementById("cash").textContent=money(cash);
+ document.getElementById("transfer").textContent=money(transfer);
+ const recent=[...sales].reverse().slice(0,30);
+ document.getElementById("history").innerHTML=recent.length?recent.map(s=>{
+   const d=new Date(s.time);
+   const t=d.toLocaleTimeString("th-TH",{hour:"2-digit",minute:"2-digit"});
+   return `<div class="row"><span>${s.product}<br><small>${s.method} • ${t}</small></span><b>${money(s.price)}</b></div>`;
+ }).join(""):"<p style='color:#777'>ยังไม่มีรายการ</p>";
+}
+function clearAll(){
+ if(confirm("ต้องการล้างรายการขายทั้งหมดใช่ไหม?")){
+  sales=[];localStorage.removeItem("salesAppData");render();showToast("ล้างรายการแล้ว");
+ }
+}
+function exportData(){
+ const blob=new Blob([JSON.stringify(sales,null,2)],{type:"application/json"});
+ const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="sales-backup.json";a.click();
+}
+function importData(e){
+ const file=e.target.files[0];if(!file)return;
+ const r=new FileReader();
+ r.onload=()=>{try{sales=JSON.parse(r.result);localStorage.setItem("salesAppData",JSON.stringify(sales));render();showToast("นำเข้าข้อมูลแล้ว")}catch{alert("ไฟล์ไม่ถูกต้อง")}};
+ r.readAsText(file);
+}
+function showToast(t){
+ const x=document.getElementById("toast");x.textContent=t;x.style.display="block";
+ setTimeout(()=>x.style.display="none",1200);
+}
+renderProducts();render();
+</script>
+</body>
+</html>
